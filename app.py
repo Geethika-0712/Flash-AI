@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import urllib.parse
 
@@ -73,7 +74,21 @@ def create_marketplace_links(product_name):
     }
 
 # ==================================================
-# 4. AI PROBLEM ANALYSIS
+# 4. HELPER TO EXTRACT CLEAN JSON
+# ==================================================
+def parse_json_response(raw_text):
+    cleaned = raw_text.strip()
+    # Strip markdown code fences if present (e.g., ```json ... ```)
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1:
+        cleaned = cleaned[start:end + 1]
+    return json.loads(cleaned)
+
+# ==================================================
+# 5. AI PROBLEM ANALYSIS
 # ==================================================
 def analyze_problem(problem):
 
@@ -110,7 +125,7 @@ LENGTH LIMITS:
 - Advantages and limitations: maximum 2 items each.
 - Next steps: maximum 3 short actions.
 
-Return valid JSON only, using this exact structure:
+Return valid JSON only (no markdown fences, no extra text), using this exact structure:
 {{
   "problem_understood": "Short explanation",
   "desired_outcome": "Desired result",
@@ -138,26 +153,41 @@ Return valid JSON only, using this exact structure:
 }}
 """
 
+    # Gemma 4 models use separate capacity from congested Gemini Flash endpoints
     models_to_try = [
-        "gemini-4-neon",
+        "gemma-4-31b-it",
+        "gemma-4-26b-a4b-it",
         "gemini-4-hydrogen",
-        "gemini-3.5-flash-lite",
-        "gemini-3.6-flash",
-        "gemini-3.1-flash-lite",
-        "gemini-3.8-flash"
+        "gemini-3.5-flash-lite"
     ]
     response = None
     last_error = None
 
     for model_name in models_to_try:
         try:
-            response = ai_client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json"
+            if model_name.startswith("gemma-"):
+                response = ai_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        http_options=types.HttpOptions(
+                            timeout=20000,
+                            retry_options=types.HttpRetryOptions(attempts=1)
+                        )
+                    )
                 )
-            )
+            else:
+                response = ai_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        http_options=types.HttpOptions(
+                            timeout=20000,
+                            retry_options=types.HttpRetryOptions(attempts=1)
+                        )
+                    )
+                )
             if response and response.text:
                 break
         except Exception as err:
@@ -165,13 +195,13 @@ Return valid JSON only, using this exact structure:
 
     if not response or not response.text:
         raise RuntimeError(
-            f"Google's servers are temporarily overloaded. Please click Find Suitable Solutions again in a few seconds. ({last_error})"
+            f"All AI models are temporarily busy. Please try again in a few seconds. ({last_error})"
         )
 
-    result = json.loads(response.text)
+    result = parse_json_response(response.text)
 
     if not isinstance(result, dict):
-        raise ValueError("Unexpected response format from Gemini.")
+        raise ValueError("Unexpected response format from AI.")
 
     if not isinstance(result.get("alternatives"), list):
         raise ValueError("The AI did not return a valid alternatives list.")
@@ -179,7 +209,7 @@ Return valid JSON only, using this exact structure:
     return result
 
 # ==================================================
-# 5. USER INPUT
+# 6. USER INPUT
 # ==================================================
 st.subheader("💡 Describe Your Problem")
 
@@ -200,7 +230,7 @@ with st.form("problem_form"):
     )
 
 # ==================================================
-# 6. ANALYZE AND DISPLAY RESULTS
+# 7. ANALYZE AND DISPLAY RESULTS
 # ==================================================
 if submitted:
 
