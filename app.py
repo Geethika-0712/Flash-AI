@@ -133,7 +133,11 @@ Return valid JSON only, using this exact structure:
 }}
 """
 
-    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.6-flash"]
+    models_to_try = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-3.8-flash"
+    ]
     response = None
     last_error = None
 
@@ -144,7 +148,13 @@ Return valid JSON only, using this exact structure:
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
-                    http_options=types.HttpOptions(timeout=15000)
+                    thinking_config=types.ThinkingConfig(
+                        thinking_level="low"
+                    ),
+                    http_options=types.HttpOptions(
+                        timeout=10000,
+                        retry_options=types.HttpRetryOptions(attempts=1)
+                    )
                 )
             )
             if response and response.text:
