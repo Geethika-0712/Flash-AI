@@ -78,7 +78,6 @@ def create_marketplace_links(product_name):
 # ==================================================
 def parse_json_response(raw_text):
     cleaned = raw_text.strip()
-    # Strip markdown code fences if present (e.g., ```json ... ```)
     cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*```$", "", cleaned)
     start = cleaned.find("{")
@@ -153,10 +152,10 @@ Return valid JSON only (no markdown fences, no extra text), using this exact str
 }}
 """
 
-    # Gemma 4 models use separate capacity from congested Gemini Flash endpoints
+    # Fast MoE Gemma 4 model first, followed by 31B and Gemini Flash backups
     models_to_try = [
-        "gemma-4-31b-it",
         "gemma-4-26b-a4b-it",
+        "gemma-4-31b-it",
         "gemini-4-hydrogen",
         "gemini-3.5-flash-lite"
     ]
@@ -171,7 +170,7 @@ Return valid JSON only (no markdown fences, no extra text), using this exact str
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         http_options=types.HttpOptions(
-                            timeout=20000,
+                            timeout=60000,
                             retry_options=types.HttpRetryOptions(attempts=1)
                         )
                     )
@@ -183,7 +182,7 @@ Return valid JSON only (no markdown fences, no extra text), using this exact str
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         http_options=types.HttpOptions(
-                            timeout=20000,
+                            timeout=60000,
                             retry_options=types.HttpRetryOptions(attempts=1)
                         )
                     )
