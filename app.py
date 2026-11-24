@@ -1,5 +1,4 @@
 import os
-import time
 import json
 import urllib.parse
 
@@ -140,37 +139,29 @@ Return valid JSON only, using this exact structure:
 """
 
     models_to_try = [
+        "gemini-4-neon",
         "gemini-4-hydrogen",
         "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.1-flash-lite",
         "gemini-3.8-flash"
     ]
     response = None
     last_error = None
 
-    for attempt in range(2):
-        for model_name in models_to_try:
-            try:
-                response = ai_client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        thinking_config=types.ThinkingConfig(
-                            thinking_level="low"
-                        ),
-                        http_options=types.HttpOptions(
-                            timeout=20000,
-                            retry_options=types.HttpRetryOptions(attempts=1)
-                        )
-                    )
+    for model_name in models_to_try:
+        try:
+            response = ai_client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
                 )
-                if response and response.text:
-                    break
-            except Exception as err:
-                last_error = err
-        if response and response.text:
-            break
-        time.sleep(2 * (attempt + 1))
+            )
+            if response and response.text:
+                break
+        except Exception as err:
+            last_error = err
 
     if not response or not response.text:
         raise RuntimeError(
