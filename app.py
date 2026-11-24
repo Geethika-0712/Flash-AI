@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import urllib.parse
 
@@ -39,11 +40,16 @@ st.divider()
 # 2. GEMINI API CONFIGURATION
 # ==================================================
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+if not GEMINI_API_KEY:
+    try:
+        GEMINI_API_KEY = str(st.secrets.get("GEMINI_API_KEY", "")).strip()
+    except Exception:
+        GEMINI_API_KEY = ""
 
 if not GEMINI_API_KEY:
     st.error(
-        "Gemini API key not found. Set GEMINI_API_KEY in your "
-        "Colab environment before starting Streamlit."
+        "Gemini API key not found. Please configure GEMINI_API_KEY in "
+        "your Streamlit Secrets or environment variables."
     )
     st.stop()
 
@@ -134,37 +140,41 @@ Return valid JSON only, using this exact structure:
 """
 
     models_to_try = [
+        "gemini-4-hydrogen",
         "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
         "gemini-3.8-flash"
     ]
     response = None
     last_error = None
 
-    for model_name in models_to_try:
-        try:
-            response = ai_client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    thinking_config=types.ThinkingConfig(
-                        thinking_level="low"
-                    ),
-                    http_options=types.HttpOptions(
-                        timeout=10000,
-                        retry_options=types.HttpRetryOptions(attempts=1)
+    for attempt in range(2):
+        for model_name in models_to_try:
+            try:
+                response = ai_client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        thinking_config=types.ThinkingConfig(
+                            thinking_level="low"
+                        ),
+                        http_options=types.HttpOptions(
+                            timeout=20000,
+                            retry_options=types.HttpRetryOptions(attempts=1)
+                        )
                     )
                 )
-            )
-            if response and response.text:
-                break
-        except Exception as err:
-            last_error = err
+                if response and response.text:
+                    break
+            except Exception as err:
+                last_error = err
+        if response and response.text:
+            break
+        time.sleep(2 * (attempt + 1))
 
     if not response or not response.text:
         raise RuntimeError(
-            f"All AI models are currently busy. Please try again in a few seconds. ({last_error})"
+            f"Google's servers are temporarily overloaded. Please click Find Suitable Solutions again in a few seconds. ({last_error})"
         )
 
     result = json.loads(response.text)
